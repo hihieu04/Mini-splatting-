@@ -3,7 +3,6 @@ import sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(os.path.join(BASE_DIR, '..')))
 
-
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim
@@ -92,7 +91,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if (iteration - 1) == debug_from:
             pipe.debug = True
 
-        render_pkg = render_imp(viewpoint_cam, gaussians, pipe, background, culling=gaussians._culling[:,viewpoint_cam.uid])
+        render_pkg = render_imp(viewpoint_cam, gaussians, pipe, background, culling=None)
 
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
 
@@ -126,13 +125,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 # Keep track of max radii in image-space for pruning
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
 
-                if gaussians._culling[:,viewpoint_cam.uid].sum()==0:
-                    gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
-                else:
+                #if gaussians._culling[:,viewpoint_cam.uid].sum()==0:
+                #gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
+                #else:
                     # normalize xy gradient after culling
-                    gaussians.add_densification_stats_culling(viewspace_point_tensor, visibility_filter, gaussians.factor_culling)
+                #gaussians.add_densification_stats_culling(viewspace_point_tensor, visibility_filter, gaussians.factor_culling)
+                
 
                 area_max = render_pkg["area_max"]
+                mask_blur.resize_(gaussians._xyz.shape[0])  # Cập nhật kích thước của mask_blur nếu số Gaussian thay đổi
+                mask_blur.fill_(0)  # Đặt lại giá trị để tránh lỗi từ vòng lặp trước
                 mask_blur = torch.logical_or(mask_blur, area_max>(image.shape[1]*image.shape[2]/5000))
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 and iteration != args.depth_reinit_iter:
@@ -160,15 +162,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     mask_blur = torch.zeros(gaussians._xyz.shape[0], device='cuda')
                     torch.cuda.empty_cache()
                     # print(gaussians._xyz.shape)
-
-                if iteration >= args.aggressive_clone_from_iter and iteration % args.aggressive_clone_interval == 0 and iteration!=args.depth_reinit_iter:
-                    gaussians.culling_with_clone(scene, render_simp, iteration, args, pipe, background)
-                    torch.cuda.empty_cache()
-                    mask_blur = torch.zeros(gaussians._xyz.shape[0], device='cuda')
+                # if iteration >= args.aggressive_clone_from_iter and iteration % args.aggressive_clone_interval == 0 and iteration!=args.depth_reinit_iter:
+                #     gaussians.aggressive_clone(scene, render_simp, iteration, args, pipe, background)
+                #     torch.cuda.empty_cache()
+                #     mask_blur = torch.zeros(gaussians._xyz.shape[0], device='cuda')
                     # print(gaussians._xyz.shape)
 
             if iteration == args.simp_iteration1:
-                gaussians.culling_with_interesction_sampling(scene, render_simp, iteration, args, pipe, background)
+                gaussians.interesction_sampling(scene, render_simp, iteration, args, pipe, background)
                 gaussians.max_sh_degree=dataset.sh_degree
                 gaussians.extend_features_rest()
 
@@ -178,14 +179,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 
 
             if iteration == args.simp_iteration2:
-                gaussians.culling_with_interesction_preserving(scene, render_simp, iteration, args, pipe, background)
+                gaussians.interesction_preserving(scene, render_simp, iteration, args, pipe, background)
                 torch.cuda.empty_cache()
                 # print(gaussians._xyz.shape)
 
             if iteration == (args.simp_iteration2+opt.iterations)//2:
                 gaussians.init_culling(len(scene.getTrainCameras()))
-
-
 
             # Optimizer step
             if iteration < opt.iterations:

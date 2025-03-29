@@ -961,5 +961,3 @@ class GaussianModel:
 
 
 
-
-
