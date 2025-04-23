@@ -338,9 +338,9 @@ class GaussianModel:
 
         self.denom = self.denom[valid_points_mask]
         self.max_radii2D = self.max_radii2D[valid_points_mask]
-
-        self._culling = self._culling[valid_points_mask]
-        self.factor_culling = self.factor_culling[valid_points_mask]
+        torch.cuda.empty_cache()
+        # self._culling = self._culling[valid_points_mask]
+        # self.factor_culling = self.factor_culling[valid_points_mask]
 
 
     def cat_tensors_to_optimizer(self, tensors_dict):
@@ -405,8 +405,9 @@ class GaussianModel:
 
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
-        self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
+        self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter, :2], dim=-1, keepdim=True)
         self.denom[update_filter] += 1
+
 
 
     def add_densification_stats_culling(self, viewspace_point_tensor, update_filter, factor):
@@ -430,10 +431,10 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
-        new_culling = self._culling[selected_pts_mask]
-        self._culling = torch.cat((self._culling, new_culling))
-        new_factor_culling = self.factor_culling[selected_pts_mask]
-        self.factor_culling = torch.cat((self.factor_culling, new_factor_culling))
+        # new_culling = self._culling[selected_pts_mask]
+        # self._culling = torch.cat((self._culling, new_culling))
+        # new_factor_culling = self.factor_culling[selected_pts_mask]
+        # self.factor_culling = torch.cat((self.factor_culling, new_factor_culling))
 
 
     def densify_and_split(self, grads, grad_threshold, scene_extent, N=2):
@@ -514,10 +515,10 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
-        new_culling = self._culling[selected_pts_mask].repeat(N,1)
-        self._culling = torch.cat((self._culling, new_culling))
-        new_factor_culling = self.factor_culling[selected_pts_mask].repeat(N,1)
-        self.factor_culling = torch.cat((self.factor_culling, new_factor_culling))          
+        # new_culling = self._culling[selected_pts_mask].repeat(N,1)
+        # self._culling = torch.cat((self._culling, new_culling))
+        # new_factor_culling = self.factor_culling[selected_pts_mask].repeat(N,1)
+        # self.factor_culling = torch.cat((self.factor_culling, new_factor_culling))          
 
         prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
         self.prune_points(prune_filter)
@@ -566,7 +567,7 @@ class GaussianModel:
         for view in views:
             gt = view.original_image[0:3, :, :]
 
-            render_depth_pkg = render_depth(view, self, pipe, background, culling=self._culling[:,view.uid])
+            render_depth_pkg = render_depth(view, self, pipe, background, culling=None)
 
 
             out_pts = render_depth_pkg["out_pts"]
@@ -605,7 +606,7 @@ class GaussianModel:
         accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
         views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
         for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+            render_pkg = render_simp(view, self, pipe, background, culling=None)
             
             accum_weights = render_pkg["accum_weights"]
             area_proj = render_pkg["area_proj"]
@@ -645,7 +646,7 @@ class GaussianModel:
         accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
         views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
         for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+            render_pkg = render_simp(view, self, pipe, background, culling=None)
             
             accum_weights = render_pkg["accum_weights"]
             area_proj = render_pkg["area_proj"]
@@ -672,7 +673,7 @@ class GaussianModel:
         imp_score = torch.zeros(self._xyz.shape[0]).cuda()
         views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
         for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+            render_pkg = render_simp(view, self, pipe, background)
             accum_weights = render_pkg["accum_weights"]
 
             imp_score=imp_score+accum_weights
@@ -685,103 +686,103 @@ class GaussianModel:
 
     
 
-    def visibility_culling(self, scene, render_simp, iteration, args, pipe, background):
+    # def visibility_culling(self, scene, render_simp, iteration, args, pipe, background):
 
-        imp_score = torch.zeros(self._xyz.shape[0]).cuda()
-        views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
+    #     imp_score = torch.zeros(self._xyz.shape[0]).cuda()
+    #     views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
 
-        self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
+    #     self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
 
-        count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
-        count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
 
-        for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
-            accum_weights = render_pkg["accum_weights"]
+    #     for view in views:
+    #         render_pkg = render_simp(view, self, pipe, background, culling=None)
+    #         accum_weights = render_pkg["accum_weights"]
 
-            non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
+    #         non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
 
-            self._culling[:,view.uid]=(non_prune_mask==False)
+    #         self._culling[:,view.uid]=(non_prune_mask==False)
 
-            count_rad[render_pkg["radii"]>0] += 1
-            count_vis[non_prune_mask] += 1
+    #         count_rad[render_pkg["radii"]>0] += 1
+    #         count_vis[non_prune_mask] += 1
 
-            imp_score=imp_score+accum_weights
+    #         imp_score=imp_score+accum_weights
 
-        non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.999) 
+    #     non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.999) 
 
-        self.factor_culling=count_vis/(count_rad+1e-1)
+    #     self.factor_culling=count_vis/(count_rad+1e-1)
 
-        mask = (count_vis<=1)[:,0]
-        mask = torch.logical_or(mask, non_prune_mask==False)
-        self.prune_points(mask) 
+    #     mask = (count_vis<=1)[:,0]
+    #     mask = torch.logical_or(mask, non_prune_mask==False)
+    #     self.prune_points(mask) 
 
 
-    def aggressive_clone(self, scene, render_simp, iteration, args, pipe, background):
+    # def aggressive_clone(self, scene, render_simp, iteration, args, pipe, background):
 
-        imp_score = torch.zeros(self._xyz.shape[0]).cuda()
-        accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
-        views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
+    #     imp_score = torch.zeros(self._xyz.shape[0]).cuda()
+    #     accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
+    #     views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
 
-        for view in views:
-            # render_pkg = render_simp(view, self, pipe, background)
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+    #     for view in views:
+    #         # render_pkg = render_simp(view, self, pipe, background)
+    #         render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
 
-            accum_weights = render_pkg["accum_weights"]
-            area_max = render_pkg["area_max"]
+    #         accum_weights = render_pkg["accum_weights"]
+    #         area_max = render_pkg["area_max"]
 
-            imp_score=imp_score+accum_weights
-            accum_area_max = accum_area_max+area_max
+    #         imp_score=imp_score+accum_weights
+    #         accum_area_max = accum_area_max+area_max
 
-        non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.999) 
-        self.prune_points(~non_prune_mask) 
+    #     non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.999) 
+    #     self.prune_points(~non_prune_mask) 
 
-        imp_score[accum_area_max==0]=0
-        intersection_pts_mask = init_cdf_mask(importance=imp_score, thres=0.99)
-        intersection_pts_mask=intersection_pts_mask[non_prune_mask]
-        self.clone(intersection_pts_mask)
+    #     imp_score[accum_area_max==0]=0
+    #     intersection_pts_mask = init_cdf_mask(importance=imp_score, thres=0.99)
+    #     intersection_pts_mask=intersection_pts_mask[non_prune_mask]
+    #     self.clone(intersection_pts_mask)
 
 
     # aggressive_clone with visibility_culling
-    def culling_with_clone(self, scene, render_simp, iteration, args, pipe, background):
+    # def culling_with_clone(self, scene, render_simp, iteration, args, pipe, background):
 
-        imp_score = torch.zeros(self._xyz.shape[0]).cuda()
-        accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
-        views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
+    #     imp_score = torch.zeros(self._xyz.shape[0]).cuda()
+    #     accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
+    #     views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
 
-        self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
+    #     self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
 
-        count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
-        count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
 
-        for view in views:
-            # render_pkg = render_simp(view, self, pipe, background)
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+    #     for view in views:
+    #         # render_pkg = render_simp(view, self, pipe, background)
+    #         render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
 
-            accum_weights = render_pkg["accum_weights"]
-            area_max = render_pkg["area_max"]
+    #         accum_weights = render_pkg["accum_weights"]
+    #         area_max = render_pkg["area_max"]
 
-            imp_score=imp_score+accum_weights
-            accum_area_max = accum_area_max+area_max
+    #         imp_score=imp_score+accum_weights
+    #         accum_area_max = accum_area_max+area_max
 
-            visibility_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
-            self._culling[:,view.uid]=(visibility_mask==False)
-            count_rad[render_pkg["radii"]>0] += 1
-            count_vis[visibility_mask] += 1
+    #         visibility_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
+    #         self._culling[:,view.uid]=(visibility_mask==False)
+    #         count_rad[render_pkg["radii"]>0] += 1
+    #         count_vis[visibility_mask] += 1
 
-        self.factor_culling=count_vis/(count_rad+1e-1)
+    #     self.factor_culling=count_vis/(count_rad+1e-1)
 
-        non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.999) 
-        prune_mask = (count_vis<=1)[:,0]
-        prune_mask = torch.logical_or(prune_mask, non_prune_mask==False)
-        self.prune_points(prune_mask) 
+    #     non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.999) 
+    #     prune_mask = (count_vis<=1)[:,0]
+    #     prune_mask = torch.logical_or(prune_mask, non_prune_mask==False)
+    #     self.prune_points(prune_mask) 
 
 
-        imp_score[accum_area_max==0]=0
-        intersection_pts_mask = init_cdf_mask(importance=imp_score, thres=0.99)
+    #     imp_score[accum_area_max==0]=0
+    #     intersection_pts_mask = init_cdf_mask(importance=imp_score, thres=0.99)
 
-        intersection_pts_mask=intersection_pts_mask[~prune_mask]
-        self.clone(intersection_pts_mask)
+    #     intersection_pts_mask=intersection_pts_mask[~prune_mask]
+    #     self.clone(intersection_pts_mask)
 
 
     def clone(self, selected_pts_mask):
@@ -816,145 +817,147 @@ class GaussianModel:
     
 
     # interesction_preserving with visibility_culling
-    def culling_with_interesction_preserving(self, scene, render_simp, iteration, args, pipe, background):
+    # def culling_with_interesction_preserving(self, scene, render_simp, iteration, args, pipe, background):
 
-        imp_score = torch.zeros(self._xyz.shape[0]).cuda()
-        accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
-        views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
+    #     imp_score = torch.zeros(self._xyz.shape[0]).cuda()
+    #     accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
+    #     views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
 
-        self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
+    #     self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
 
-        count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
-        count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
 
-        for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
-            accum_weights = render_pkg["accum_weights"]
-            area_proj = render_pkg["area_proj"]
-            area_max = render_pkg["area_max"]
+    #     for view in views:
+    #         render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+    #         accum_weights = render_pkg["accum_weights"]
+    #         area_proj = render_pkg["area_proj"]
+    #         area_max = render_pkg["area_max"]
 
-            accum_area_max = accum_area_max+area_max
+    #         accum_area_max = accum_area_max+area_max
 
-            if args.imp_metric=='outdoor':
-                mask_t=area_max!=0 
-                temp=imp_score+accum_weights/area_proj
-                imp_score[mask_t] = temp[mask_t]
-            else:
-                imp_score=imp_score+accum_weights            
+    #         if args.imp_metric=='outdoor':
+    #             mask_t=area_max!=0 
+    #             temp=imp_score+accum_weights/area_proj
+    #             imp_score[mask_t] = temp[mask_t]
+    #         else:
+    #             imp_score=imp_score+accum_weights            
 
-            non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
+    #         non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
 
-            self._culling[:,view.uid]=(non_prune_mask==False)
+    #         self._culling[:,view.uid]=(non_prune_mask==False)
 
-            count_rad[render_pkg["radii"]>0] += 1
-            count_vis[non_prune_mask] += 1
-
-
-        imp_score[accum_area_max==0]=0
-        non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.99) 
-
-        self.factor_culling=count_vis/(count_rad+1e-1)
+    #         count_rad[render_pkg["radii"]>0] += 1
+    #         count_vis[non_prune_mask] += 1
 
 
-        prune_mask = (count_vis<=1)[:,0]
-        prune_mask = torch.logical_or(prune_mask, non_prune_mask==False)
-        self.prune_points(prune_mask) 
+    #     imp_score[accum_area_max==0]=0
+    #     non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.99) 
+
+    #     self.factor_culling=count_vis/(count_rad+1e-1)
+
+
+    #     prune_mask = (count_vis<=1)[:,0]
+    #     prune_mask = torch.logical_or(prune_mask, non_prune_mask==False)
+    #     self.prune_points(prune_mask) 
 
 
     # interesction_sampling with visibility_culling
-    def culling_with_interesction_sampling(self, scene, render_simp, iteration, args, pipe, background):
+    # def culling_with_interesction_sampling(self, scene, render_simp, iteration, args, pipe, background):
 
-        imp_score = torch.zeros(self._xyz.shape[0]).cuda()
-        accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
-        views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
+    #     imp_score = torch.zeros(self._xyz.shape[0]).cuda()
+    #     accum_area_max = torch.zeros(self._xyz.shape[0]).cuda()
+    #     views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
 
-        self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
+    #     self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
 
-        count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
-        count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
 
-        for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
-            accum_weights = render_pkg["accum_weights"]
-            area_proj = render_pkg["area_proj"]
-            area_max = render_pkg["area_max"]
+    #     for view in views:
+    #         render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+    #         accum_weights = render_pkg["accum_weights"]
+    #         area_proj = render_pkg["area_proj"]
+    #         area_max = render_pkg["area_max"]
 
-            accum_area_max = accum_area_max+area_max
+    #         accum_area_max = accum_area_max+area_max
 
-            if args.imp_metric=='outdoor':
-                mask_t=area_max!=0 
-                temp=imp_score+accum_weights/area_proj
-                imp_score[mask_t] = temp[mask_t]
-            else:
-                imp_score=imp_score+accum_weights
+    #         if args.imp_metric=='outdoor':
+    #             mask_t=area_max!=0 
+    #             temp=imp_score+accum_weights/area_proj
+    #             imp_score[mask_t] = temp[mask_t]
+    #         else:
+    #             imp_score=imp_score+accum_weights
 
-            non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
+    #         non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
 
-            self._culling[:,view.uid]=(non_prune_mask==False)
+    #         self._culling[:,view.uid]=(non_prune_mask==False)
 
-            count_rad[render_pkg["radii"]>0] += 1
-            count_vis[non_prune_mask] += 1
-
-
-        imp_score[accum_area_max==0]=0
-        prob = imp_score/imp_score.sum()
-        prob = prob.cpu().numpy()
-
-        factor=args.sampling_factor
-        N_xyz=self._xyz.shape[0]
-        num_sampled=int(N_xyz*factor*((prob!=0).sum()/prob.shape[0]))
-        indices = np.random.choice(N_xyz, size=num_sampled, 
-                                    p=prob, replace=False)
-
-        non_prune_mask = np.zeros(N_xyz, dtype=bool)
-        non_prune_mask[indices] = True
+    #         count_rad[render_pkg["radii"]>0] += 1
+    #         count_vis[non_prune_mask] += 1
 
 
-        self.factor_culling=count_vis/(count_rad+1e-1)
+    #     imp_score[accum_area_max==0]=0
+    #     prob = imp_score/imp_score.sum()
+    #     prob = prob.cpu().numpy()
 
-        prune_mask = (count_vis<=1)[:,0]
-        prune_mask = torch.logical_or(prune_mask, torch.tensor(non_prune_mask==False, device='cuda'))
-        self.prune_points(prune_mask) 
+    #     factor=args.sampling_factor
+    #     N_xyz=self._xyz.shape[0]
+    #     num_sampled=int(N_xyz*factor*((prob!=0).sum()/prob.shape[0]))
+    #     indices = np.random.choice(N_xyz, size=num_sampled, 
+    #                                 p=prob, replace=False)
+
+    #     non_prune_mask = np.zeros(N_xyz, dtype=bool)
+    #     non_prune_mask[indices] = True
+
+
+    #     self.factor_culling=count_vis/(count_rad+1e-1)
+
+    #     prune_mask = (count_vis<=1)[:,0]
+    #     prune_mask = torch.logical_or(prune_mask, torch.tensor(non_prune_mask==False, device='cuda'))
+    #     self.prune_points(prune_mask) 
 
 
     # importance_pruning with visibility_culling
-    def culling_with_importance_pruning(self, scene, render_simp, iteration, args, pipe, background):
+    # def culling_with_importance_pruning(self, scene, render_simp, iteration, args, pipe, background):
 
-        imp_score = torch.zeros(self._xyz.shape[0]).cuda()
-        views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
+    #     imp_score = torch.zeros(self._xyz.shape[0]).cuda()
+    #     views = scene.getTrainCameras_warn_up(iteration, args.warn_until_iter, scale=1.0, scale2=2.0).copy()
 
-        self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
+    #     self._culling=torch.zeros((self._xyz.shape[0], len(views)), dtype=torch.bool, device='cuda')
 
-        count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
-        count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_rad = torch.zeros((self._xyz.shape[0],1)).cuda()
+    #     count_vis = torch.zeros((self._xyz.shape[0],1)).cuda()
 
-        for view in views:
-            render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
-            accum_weights = render_pkg["accum_weights"]
+    #     for view in views:
+    #         render_pkg = render_simp(view, self, pipe, background, culling=self._culling[:,view.uid])
+    #         accum_weights = render_pkg["accum_weights"]
 
-            imp_score=imp_score+accum_weights      
+    #         imp_score=imp_score+accum_weights      
 
-            non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
+    #         non_prune_mask = init_cdf_mask(importance=accum_weights, thres=0.99)
 
-            self._culling[:,view.uid]=(non_prune_mask==False)
+    #         self._culling[:,view.uid]=(non_prune_mask==False)
 
-            count_rad[render_pkg["radii"]>0] += 1
-            count_vis[non_prune_mask] += 1
+    #         count_rad[render_pkg["radii"]>0] += 1
+    #         count_vis[non_prune_mask] += 1
 
 
-        non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.99) 
+    #     non_prune_mask = init_cdf_mask(importance=imp_score, thres=0.99) 
 
-        self.factor_culling=count_vis/(count_rad+1e-1)
+    #     self.factor_culling=count_vis/(count_rad+1e-1)
 
-        prune_mask = (count_vis<=1)[:,0]
-        prune_mask = torch.logical_or(prune_mask, non_prune_mask==False)
-        self.prune_points(prune_mask) 
+    #     prune_mask = (count_vis<=1)[:,0]
+    #     prune_mask = torch.logical_or(prune_mask, non_prune_mask==False)
+    #     self.prune_points(prune_mask) 
 
 
     def extend_features_rest(self):
 
         features = torch.zeros((self._xyz.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
         self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
+
+
 
 
 

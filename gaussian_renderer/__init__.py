@@ -165,13 +165,13 @@ def render_imp(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tens
     colors_precomp = None
     if override_color is None:
         if pipe.convert_SHs_python:
-            shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)
-            dir_pp = (pc.get_xyz - viewpoint_camera.camera_center.repeat(pc.get_features.shape[0], 1))
-            dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True)
-            sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
-            colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
+            shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2) #chua he so SH cho tung Gaussian voi 3 kenh mau (RGB)
+            dir_pp = (pc.get_xyz - viewpoint_camera.camera_center.repeat(pc.get_features.shape[0], 1)) #tinh huong tu cam -> Gau
+            dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True) #chuan hoa vector 
+            sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized) #tinh mau tu sh_view va huong
+            colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0) #dieu chinh SH ve khoang [0,1]
         else:
-            dc, shs = pc.get_features_dc, pc.get_features_rest
+            dc, shs = pc.get_features_dc, pc.get_features_rest #lay gia tri SH goc tu model
     else:
         colors_precomp = override_color
 

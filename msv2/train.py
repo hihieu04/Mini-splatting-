@@ -55,7 +55,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter += 1
 
     mask_blur = torch.zeros(gaussians._xyz.shape[0], device='cuda')
-    gaussians.init_culling(len(scene.getTrainCameras()))
+    #gaussians.init_culling(len(scene.getTrainCameras()))
 
     for iteration in range(first_iter, opt.iterations + 1):   
 
@@ -124,12 +124,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
-
-                #if gaussians._culling[:,viewpoint_cam.uid].sum()==0:
-                #gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
-                #else:
-                    # normalize xy gradient after culling
-                #gaussians.add_densification_stats_culling(viewspace_point_tensor, visibility_filter, gaussians.factor_culling)
+                
+                gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
+                # if gaussians._culling[:,viewpoint_cam.uid].sum()==0:
+                #     gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
+                # else:
+                #     # normalize xy gradient after culling
+                #     gaussians.add_densification_stats_culling(viewspace_point_tensor, visibility_filter, gaussians.factor_culling)
                 
 
                 area_max = render_pkg["area_max"]
@@ -158,7 +159,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     gaussians.reinitial_pts(pts, rgb)
 
                     gaussians.training_setup(opt)
-                    gaussians.init_culling(len(scene.getTrainCameras()))
+                    #gaussians.init_culling(len(scene.getTrainCameras()))
                     mask_blur = torch.zeros(gaussians._xyz.shape[0], device='cuda')
                     torch.cuda.empty_cache()
                     # print(gaussians._xyz.shape)
@@ -183,8 +184,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 torch.cuda.empty_cache()
                 # print(gaussians._xyz.shape)
 
-            if iteration == (args.simp_iteration2+opt.iterations)//2:
-                gaussians.init_culling(len(scene.getTrainCameras()))
+            # if iteration == (args.simp_iteration2+opt.iterations)//2:
+            #     gaussians.init_culling(len(scene.getTrainCameras()))
 
             # Optimizer step
             if iteration < opt.iterations:
@@ -311,13 +312,15 @@ if __name__ == "__main__":
     parser.add_argument("--aggressive_clone_from_iter", type=int, default = 500)
     parser.add_argument("--aggressive_clone_interval", type=int, default = 250)
 
-    parser.add_argument("--warn_until_iter", type=int, default = 3_000)
-    parser.add_argument("--depth_reinit_iter", type=int, default=2_000)
+    parser.add_argument("--warn_until_iter", type=int, default = 15_000)
+    parser.add_argument("--depth_reinit_iter", type=int, default=5_000)
     parser.add_argument("--num_depth_factor", type=float, default=1)
 
-    parser.add_argument("--simp_iteration1", type=int, default = 3_000)
-    parser.add_argument("--simp_iteration2", type=int, default = 8_000)
-    parser.add_argument("--sampling_factor", type=float, default = 0.6)
+    # parser.add_argument("--simp_iteration1", type=int, default = 3_000)
+    # parser.add_argument("--simp_iteration2", type=int, default = 8_000)
+    parser.add_argument("--simp_iteration1", type=int, default = 15_000)
+    parser.add_argument("--simp_iteration2", type=int, default = 20_000)
+    parser.add_argument("--sampling_factor", type=float, default = 0.5)
 
 
     args = parser.parse_args(sys.argv[1:])
@@ -350,5 +353,7 @@ if __name__ == "__main__":
     with open(time_txt_path, 'w') as f:  
         f.write(str(time_total)) 
 
+    print("Peak memory 1: ", torch.cuda.max_memory_allocated())
+    print("Peak memory 2: ", torch.cuda.max_memory_reserved())
     # All done
     print("\nTraining complete.")
